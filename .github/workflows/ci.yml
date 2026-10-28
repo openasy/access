@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, "lts/**"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build the image without pushing
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          load: true
+          tags: access:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Access does not start without its key, so the smoke test mounts one.
+      - name: Smoke test
+        run: |
+          openssl rand -hex 32 > kek
+          docker run -d --name smoke -p 8080:8080 -v "$PWD/kek:/run/secrets/openasy-kek:ro" access:ci
+          for _ in $(seq 1 30); do curl -sf localhost:8080/readyz && break; sleep 1; done
+          curl -sf localhost:8080/api/v1/version | grep -q '"product":"access"'
+          curl -sf localhost:8080/metrics | grep -q 'openasy_build_info{product="access"'
+          curl -sf localhost:8080/api/v1/ca | grep -q '"publicKey":"ssh-ed25519 '
+          curl -sf localhost:8080/ | grep -q '<div id="root">'
+          docker logs smoke
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+
+      # A real OpenSSH server trusts the image's CA; ssh logs in with a certificate only after approval (ADR 0061).
+      - name: End-to-end with OpenSSH
+        run: e2e/run.sh access:ci

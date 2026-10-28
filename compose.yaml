@@ -1,0 +1,35 @@
+# Access. People ask for SSH access to a server with a reason and a duration, someone else approves, and the
+# certificate they get works on that server only and stops working when the access ends (ADR 0061).
+#
+#   openssl rand -hex 32 > openasy-kek   # Access's key: its SSH certificate authority and sign-in secrets (ADR 0021). Keep it with your backups
+#   docker compose up -d
+#   docker compose logs access | grep 'no owner yet'   # the one-time link that creates the owner account
+services:
+  access:
+    image: ghcr.io/openasy/access:0.1.0
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    tmpfs: [/tmp]
+    ports:
+      - "127.0.0.1:8080:8080" # UI and API; put a TLS proxy in front to reach it from elsewhere
+    volumes:
+      - access-data:/data # SQLite database: servers, requests, approvals, certificates issued and the audit log
+    secrets:
+      - openasy-kek # mounted at /run/secrets/openasy-kek; Access does not start without it
+    environment:
+      # The address people open Access at; with a TLS proxy in front, its https:// URL. Servers fetch the revocation
+      # list from it.
+      ACCESS_PUBLIC_URL: ${ACCESS_PUBLIC_URL:-http://localhost:8080}
+      # Sign in with your identity provider (OIDC), see the README:
+      # OPENASY_OIDC_ISSUER: https://login.example.com
+      # OPENASY_OIDC_CLIENT_ID: access
+      # OPENASY_OIDC_CLIENT_SECRET: ${OPENASY_OIDC_CLIENT_SECRET}
+
+volumes:
+  access-data:
+
+secrets:
+  openasy-kek:
+    file: ./openasy-kek

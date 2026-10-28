@@ -1,0 +1,83 @@
+/* The few layouts this product needs that @openasy/ui's prebuilt styles do not include. Colours stay in the library's tokens. */
+
+/* One line of a long value in a table cell; the full text is in the title. */
+.access-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  max-width: 36rem;
+  overflow-wrap: anywhere;
+}
+
+/* Keys and fingerprints break anywhere rather than widening their column. */
+.access-wrap {
+  overflow-wrap: anywhere;
+}
+
+/* A request waiting for a decision: who, what and why, then the buttons. */
+.access-pending {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--oa-line);
+}
+
+.access-pending:last-child {
+  border-bottom: 0;
+}
+
+@media (min-width: 1024px) {
+  .access-pending {
+    grid-template-columns: 220px minmax(0, 1fr) auto;
+    align-items: center;
+  }
+}
+
+/* Facts of a request: a label, then its value. */
+.access-facts {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr);
+  gap: 0.375rem 1rem;
+  margin: 0;
+}
+
+.access-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Numbered steps. */
+.access-steps {
+  list-style: decimal;
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.access-textarea {
+  font: inherit;
+  font-family: var(--oa-font-mono);
+  font-size: 0.75rem;
+  padding: 0.5rem;
+  border: 1px solid var(--oa-line);
+  border-radius: 0.375rem;
+  background: transparent;
+  color: inherit;
+  resize: vertical;
+}
+
+/* Fields side by side from 640px, as the library's sm:grid-cols-2 does for two. */
+.access-cols-3 {
+  display: grid;
+  gap: 0.5rem;
+}
+
+@media (min-width: 640px) {
+  .access-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

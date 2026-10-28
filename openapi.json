@@ -1,0 +1,2082 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "OpenAsy Access API",
+    "version": "0.1.0",
+    "summary": "SSH access to servers only when someone asked and someone else approved, with certificates that expire with it.",
+    "description": "Every screen of Access uses this API, and so can your scripts (ADR 0014). Within `/api/v1` changes are additive only; anything removed is deprecated first (ADR 0024). Errors use Problem Details (RFC 9457).\n\nAsking for access, approving it and getting a certificate are a person's acts: they need the session of someone signed in with a second factor or through an identity provider, never an API token. Everything else takes a session or an API token, and each operation names the role it needs (`x-openasy-role`: viewer, editor, admin; ADR 0003). The CA's public key and the revocation list need no sign-in, for the servers.\n\nSign-in, members and API tokens are under `/api/v1/auth`, provided by [@openasy/auth](https://github.com/openasy/auth#routes).",
+    "license": {
+      "name": "AGPL-3.0-only",
+      "identifier": "AGPL-3.0-only"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "This Access"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Requests",
+      "description": "Asking for access, approving it, and the grants and certificates it becomes."
+    },
+    {
+      "name": "Servers",
+      "description": "Servers people may ask for, their policy, and what they trust."
+    },
+    {
+      "name": "Audit",
+      "description": "The record of every step."
+    },
+    {
+      "name": "Product",
+      "description": "Version and overview of this Access."
+    }
+  ],
+  "paths": {
+    "/api/v1/version": {
+      "get": {
+        "operationId": "version",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Product and version",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "This Access.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products": {
+      "get": {
+        "operationId": "listProducts",
+        "tags": [
+          "Product"
+        ],
+        "summary": "The install's other products",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role. From OPENASY_PRODUCTS, for the product switcher.",
+        "responses": {
+          "200": {
+            "description": "The products.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProductList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/summary": {
+      "get": {
+        "operationId": "summary",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Overview",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role. What waits for approval, what is open now, and how long people wait.",
+        "responses": {
+          "200": {
+            "description": "The overview.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Summary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "liveness",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Liveness",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The process is running.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "operationId": "readiness",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Readiness",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The database answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "metrics",
+        "tags": [
+          "Product"
+        ],
+        "summary": "Prometheus metrics",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Metrics in the Prometheus text format.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ca": {
+      "get": {
+        "operationId": "getCa",
+        "tags": [
+          "Servers"
+        ],
+        "summary": "The certificate authority's public key",
+        "security": [],
+        "description": "Not a secret, so no sign-in is needed: provisioning scripts fetch it for TrustedUserCAKeys.",
+        "responses": {
+          "200": {
+            "description": "The CA.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ca"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/revoked.krl": {
+      "get": {
+        "operationId": "revokedKeys",
+        "tags": [
+          "Servers"
+        ],
+        "summary": "The revocation list for sshd",
+        "security": [],
+        "description": "An OpenSSH key revocation list (KRL) naming the certificates of grants that ended early, until they would have expired. Servers fetch it every minute for RevokedKeys; it holds serials only, so no sign-in is needed.",
+        "responses": {
+          "200": {
+            "description": "The KRL.",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/servers": {
+      "get": {
+        "operationId": "listServers",
+        "tags": [
+          "Servers"
+        ],
+        "summary": "Servers",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role.",
+        "responses": {
+          "200": {
+            "description": "The servers, by name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createServer",
+        "tags": [
+          "Servers"
+        ],
+        "summary": "Add a server",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "admin",
+        "description": "Needs the admin role. With its policy: the logins one may ask for, the longest grant and the approvals needed.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewServer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Server"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/servers/{id}": {
+      "get": {
+        "operationId": "getServer",
+        "tags": [
+          "Servers"
+        ],
+        "summary": "A server",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The server's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Server"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "put": {
+        "operationId": "updateServer",
+        "tags": [
+          "Servers"
+        ],
+        "summary": "Change a server",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "admin",
+        "description": "Needs the admin role. A server with open grants cannot be renamed: its name is in their certificates.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The server's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewServer"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The server.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Server"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteServer",
+        "tags": [
+          "Servers"
+        ],
+        "summary": "Remove a server",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "admin",
+        "description": "Needs the admin role. Not while requests wait or grants are open for it. Its requests stay in the record.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The server's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed."
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/servers/{id}/setup": {
+      "get": {
+        "operationId": "serverSetup",
+        "tags": [
+          "Servers"
+        ],
+        "summary": "Shell commands that make a server trust Access",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role. Run once as root on the server: it trusts the CA for the server's own logins only, with a principals file per login, and fetches the revocation list every minute.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The server's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The commands.",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/requests": {
+      "get": {
+        "operationId": "listRequests",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Requests",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role. Newest first, at most 200.",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "active",
+                "ended",
+                "denied",
+                "cancelled",
+                "revoked"
+              ]
+            }
+          },
+          {
+            "name": "mine",
+            "in": "query",
+            "required": false,
+            "description": "true for the signed-in person's own.",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The requests.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createRequest",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Ask for access",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role. For yourself: a person signed in with a second factor, or through an identity provider. API tokens cannot. One request per server and login may wait or be open at a time.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The request, waiting for approval.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Request"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/requests/{id}": {
+      "get": {
+        "operationId": "getRequest",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "A request, its certificates and its record",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The request's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/requests/{id}/approve": {
+      "post": {
+        "operationId": "approveRequest",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Approve a request",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "editor",
+        "description": "Needs the editor role. By a person other than the requester, with a second factor: a try at one's own is refused and recorded. The grant starts with the last approval the server needs and lasts as long as asked for.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The request's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Decision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The request, pending or active.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Request"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/requests/{id}/deny": {
+      "post": {
+        "operationId": "denyRequest",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Deny a request",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "editor",
+        "description": "Needs the editor role. By a person other than the requester, with a second factor.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The request's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Decision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The request, denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Request"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/requests/{id}/cancel": {
+      "post": {
+        "operationId": "cancelRequest",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Cancel your own request",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role. While it waits.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The request's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request, cancelled.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Request"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/requests/{id}/end": {
+      "post": {
+        "operationId": "endGrant",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "End a grant early",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role. The requester ends their own; an editor revokes anyone's. Its certificates go on the revocation list. Sessions open on the server are not closed.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The request's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Decision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The request, ended or revoked.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Request"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/requests/{id}/certificates": {
+      "post": {
+        "operationId": "issueCertificate",
+        "tags": [
+          "Requests"
+        ],
+        "summary": "Get a certificate for your public key",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role. Only the requester, with a second factor, while the grant is open. The certificate is valid on the grant's server only, for its login, until the grant ends. Your private key never leaves your computer.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The request's id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewCertificate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The certificate.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IssuedCertificate"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "404": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "409": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/audit": {
+      "get": {
+        "operationId": "listAudit",
+        "tags": [
+          "Audit"
+        ],
+        "summary": "The audit log",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role. Every request, approval, grant, certificate, change to servers, sign-in and refused attempt, newest first. Rows are never changed or removed.",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "request",
+                "grant",
+                "certificate",
+                "server",
+                "ca",
+                "auth"
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "next from the page before.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "422": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    },
+    "/api/v1/audit/export": {
+      "get": {
+        "operationId": "exportAudit",
+        "tags": [
+          "Audit"
+        ],
+        "summary": "The whole audit log as CSV",
+        "security": [
+          {
+            "session": []
+          },
+          {
+            "apiToken": []
+          },
+          {
+            "adminToken": []
+          }
+        ],
+        "x-openasy-role": "viewer",
+        "description": "Needs the viewer role. Oldest first. Cells that a spreadsheet would run as a formula start with an apostrophe.",
+        "responses": {
+          "200": {
+            "description": "The log.",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "403": {
+            "$ref": "#/components/responses/Problem"
+          },
+          "503": {
+            "$ref": "#/components/responses/Problem"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-openasy-session",
+        "description": "The browser session after signing in (`openasy-session` when Access runs on plain http://localhost). Requests that change something must come from the Access origin."
+      },
+      "apiToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "An API token created under Settings → API tokens (`oa_access_...`): one role, always an expiry (ADR 0003). It cannot ask for, approve or use access."
+      },
+      "adminToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Only when Access is started by its tests or a local script: one shared token with the admin role. A production install does not have it."
+      }
+    },
+    "responses": {
+      "Problem": {
+        "description": "An error, as RFC 9457 Problem Details.",
+        "content": {
+          "application/problem+json": {
+            "schema": {
+              "$ref": "#/components/schemas/Problem"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Problem": {
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "format": "uri"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid-json",
+              "invalid-body",
+              "conflict",
+              "not-found",
+              "forbidden",
+              "mfa-required",
+              "payload-too-large",
+              "internal-error",
+              "unauthenticated",
+              "invalid-credentials",
+              "mfa-setup-required",
+              "cross-site",
+              "rate-limited"
+            ],
+            "description": "Stable; match on this."
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "ProductLink": {
+        "type": "object",
+        "required": [
+          "id",
+          "url"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "ProductList": {
+        "type": "object",
+        "required": [
+          "products"
+        ],
+        "properties": {
+          "products": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProductLink"
+            }
+          }
+        }
+      },
+      "Status": {
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "Version": {
+        "type": "object",
+        "required": [
+          "product",
+          "version"
+        ],
+        "properties": {
+          "product": {
+            "type": "string",
+            "const": "access"
+          },
+          "version": {
+            "type": "string"
+          }
+        }
+      },
+      "Ca": {
+        "type": "object",
+        "required": [
+          "publicKey",
+          "fingerprint",
+          "createdAt"
+        ],
+        "properties": {
+          "publicKey": {
+            "type": "string",
+            "description": "One line for sshd's TrustedUserCAKeys file."
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "SHA256:..., as ssh-keygen -l prints it."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "description": "The Ed25519 certificate authority that signs every certificate. Its private key never leaves Access, sealed with the install's key."
+      },
+      "Server": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "address",
+          "port",
+          "description",
+          "logins",
+          "maxMinutes",
+          "approvals",
+          "createdAt",
+          "updatedAt",
+          "active"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "description": "A host name; it is part of every principal, login@name."
+          },
+          "address": {
+            "type": "string",
+            "description": "Host name or IP address people connect to."
+          },
+          "port": {
+            "type": "integer"
+          },
+          "description": {
+            "type": "string"
+          },
+          "logins": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "The Unix accounts on the server one may ask to log in as."
+          },
+          "maxMinutes": {
+            "type": "integer",
+            "description": "The longest grant one may ask for."
+          },
+          "approvals": {
+            "type": "integer",
+            "enum": [
+              1,
+              2
+            ],
+            "description": "How many people other than the requester must approve."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "active": {
+            "type": "integer",
+            "description": "Grants open on it now."
+          }
+        }
+      },
+      "ServerList": {
+        "type": "object",
+        "required": [
+          "servers"
+        ],
+        "properties": {
+          "servers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Server"
+            }
+          }
+        }
+      },
+      "NewServer": {
+        "type": "object",
+        "required": [
+          "name",
+          "address",
+          "logins"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([a-z0-9.-]{0,61}[a-z0-9])?$"
+          },
+          "address": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535,
+            "default": 22
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "logins": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z_][a-z0-9_-]{0,31}$"
+            },
+            "minItems": 1,
+            "maxItems": 16
+          },
+          "maxMinutes": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 1440,
+            "default": 60
+          },
+          "approvals": {
+            "type": "integer",
+            "enum": [
+              1,
+              2
+            ],
+            "default": 1
+          }
+        }
+      },
+      "Person": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "Approval": {
+        "type": "object",
+        "required": [
+          "by",
+          "comment",
+          "at"
+        ],
+        "properties": {
+          "by": {
+            "$ref": "#/components/schemas/Person"
+          },
+          "comment": {
+            "type": "string"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Request": {
+        "type": "object",
+        "required": [
+          "id",
+          "server",
+          "login",
+          "principal",
+          "minutes",
+          "reason",
+          "ticket",
+          "requester",
+          "status",
+          "createdAt",
+          "startsAt",
+          "endsAt",
+          "approvalsNeeded",
+          "approvals",
+          "closed"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "server": {
+            "type": "object",
+            "required": [
+              "id",
+              "name"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "login": {
+            "type": "string"
+          },
+          "principal": {
+            "type": "string",
+            "description": "What its certificates carry, and the server's principals file lists: login@server."
+          },
+          "minutes": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "ticket": {
+            "type": "string"
+          },
+          "requester": {
+            "$ref": "#/components/schemas/Person"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "active",
+              "ended",
+              "denied",
+              "cancelled",
+              "revoked"
+            ],
+            "description": "active is an open grant; ended ran out or was ended by the requester; revoked was ended by someone else."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "startsAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "endsAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "approvalsNeeded": {
+            "type": "integer"
+          },
+          "approvals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Approval"
+            }
+          },
+          "closed": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "required": [
+              "by",
+              "at",
+              "comment"
+            ],
+            "properties": {
+              "by": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "comment": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "RequestList": {
+        "type": "object",
+        "required": [
+          "requests"
+        ],
+        "properties": {
+          "requests": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Request"
+            }
+          }
+        }
+      },
+      "Certificate": {
+        "type": "object",
+        "required": [
+          "serial",
+          "keyType",
+          "fingerprint",
+          "principal",
+          "validAfter",
+          "validBefore",
+          "issuedAt",
+          "revoked"
+        ],
+        "properties": {
+          "serial": {
+            "type": "integer"
+          },
+          "keyType": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string",
+            "description": "Of the person's own public key."
+          },
+          "principal": {
+            "type": "string"
+          },
+          "validAfter": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validBefore": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "issuedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "revoked": {
+            "type": "boolean",
+            "description": "Its grant ended early: it is on the revocation list until it would have expired."
+          }
+        }
+      },
+      "RequestDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Request"
+          },
+          {
+            "type": "object",
+            "required": [
+              "certificates",
+              "events"
+            ],
+            "properties": {
+              "certificates": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Certificate"
+                }
+              },
+              "events": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/AuditEvent"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "NewRequest": {
+        "type": "object",
+        "required": [
+          "serverId",
+          "login",
+          "minutes",
+          "reason"
+        ],
+        "properties": {
+          "serverId": {
+            "type": "string"
+          },
+          "login": {
+            "type": "string",
+            "description": "One of the server's logins."
+          },
+          "minutes": {
+            "type": "integer",
+            "minimum": 5,
+            "description": "At most the server's maxMinutes."
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          },
+          "ticket": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "An incident or change, such as INC-2291."
+          }
+        }
+      },
+      "Decision": {
+        "type": "object",
+        "required": [],
+        "properties": {
+          "comment": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "NewCertificate": {
+        "type": "object",
+        "required": [
+          "publicKey"
+        ],
+        "properties": {
+          "publicKey": {
+            "type": "string",
+            "description": "One line of your ~/.ssh/id_*.pub: Ed25519, ECDSA, RSA of 2048 bits or more, or a security key."
+          }
+        }
+      },
+      "IssuedCertificate": {
+        "type": "object",
+        "required": [
+          "serial",
+          "certificate",
+          "principal",
+          "fingerprint",
+          "validAfter",
+          "validBefore",
+          "command"
+        ],
+        "properties": {
+          "serial": {
+            "type": "integer"
+          },
+          "certificate": {
+            "type": "string",
+            "description": "Save it next to your key as id_ed25519-cert.pub (or the name of your key with -cert.pub); ssh uses it on its own."
+          },
+          "principal": {
+            "type": "string"
+          },
+          "fingerprint": {
+            "type": "string"
+          },
+          "validAfter": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "validBefore": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "command": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "How to connect, such as ssh deploy@10.0.0.5."
+          }
+        }
+      },
+      "AuditEvent": {
+        "type": "object",
+        "required": [
+          "id",
+          "at",
+          "actor",
+          "action",
+          "target",
+          "result",
+          "detail",
+          "requestId"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "description": "Such as request.create, request.approve, grant.start, grant.end, grant.revoke, certificate.issue, server.update or auth.sign-in."
+          },
+          "target": {
+            "type": "string"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "success",
+              "denied"
+            ],
+            "description": "denied for an attempt that was refused, such as approving one's own request."
+          },
+          "detail": {
+            "type": "string"
+          },
+          "requestId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "AuditPage": {
+        "type": "object",
+        "required": [
+          "events",
+          "next"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEvent"
+            }
+          },
+          "next": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass as cursor for the next page; null on the last."
+          }
+        }
+      },
+      "Summary": {
+        "type": "object",
+        "required": [
+          "requests",
+          "grants",
+          "certificates",
+          "servers",
+          "medianWaitMinutes",
+          "perDay",
+          "pending",
+          "active"
+        ],
+        "properties": {
+          "requests": {
+            "type": "object",
+            "required": [
+              "pending",
+              "lastDay"
+            ],
+            "properties": {
+              "pending": {
+                "type": "integer"
+              },
+              "lastDay": {
+                "type": "integer"
+              }
+            }
+          },
+          "grants": {
+            "type": "object",
+            "required": [
+              "active"
+            ],
+            "properties": {
+              "active": {
+                "type": "integer"
+              }
+            }
+          },
+          "certificates": {
+            "type": "object",
+            "required": [
+              "lastDay"
+            ],
+            "properties": {
+              "lastDay": {
+                "type": "integer"
+              }
+            }
+          },
+          "servers": {
+            "type": "integer"
+          },
+          "medianWaitMinutes": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "From request to grant, over the last 30 days."
+          },
+          "perDay": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "day",
+                "requests",
+                "granted"
+              ],
+              "properties": {
+                "day": {
+                  "type": "string"
+                },
+                "requests": {
+                  "type": "integer"
+                },
+                "granted": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "pending": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Request"
+            }
+          },
+          "active": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Request"
+            }
+          }
+        }
+      }
+    }
+  }
+}
