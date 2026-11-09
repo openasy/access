@@ -6,7 +6,7 @@
 #   docker compose logs access | grep 'no owner yet'   # the one-time link that creates the owner account
 services:
   access:
-    image: ghcr.io/openasy/access:0.1.0
+    image: ghcr.io/openasy/access:0.1.1
     restart: unless-stopped
     read_only: true
     cap_drop: [ALL]

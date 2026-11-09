@@ -2,7 +2,7 @@
   "openapi": "3.1.1",
   "info": {
     "title": "OpenAsy Access API",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "summary": "SSH access to servers only when someone asked and someone else approved, with certificates that expire with it.",
     "description": "Every screen of Access uses this API, and so can your scripts (ADR 0014). Within `/api/v1` changes are additive only; anything removed is deprecated first (ADR 0024). Errors use Problem Details (RFC 9457).\n\nAsking for access, approving it and getting a certificate are a person's acts: they need the session of someone signed in with a second factor or through an identity provider, never an API token. Everything else takes a session or an API token, and each operation names the role it needs (`x-openasy-role`: viewer, editor, admin; ADR 0003). The CA's public key and the revocation list need no sign-in, for the servers.\n\nSign-in, members and API tokens are under `/api/v1/auth`, provided by [@openasy/auth](https://github.com/openasy/auth#routes).",
     "license": {

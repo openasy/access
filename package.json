@@ -1,6 +1,6 @@
 {
   "name": "@openasy/access",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "OpenAsy Access: SSH access to servers only when someone asked and someone else approved, with certificates that expire with it.",
   "license": "AGPL-3.0-only",
