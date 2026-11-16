@@ -43,6 +43,6 @@
     "npm": ">=11"
   },
   "dependencies": {
-    "@openasy/auth": "https://github.com/openasy/auth/releases/download/v0.11.1/openasy-auth-0.11.1.tgz"
+    "@openasy/auth": "https://github.com/openasy/auth/releases/download/v0.12.1/openasy-auth-0.12.1.tgz"
   }
 }
